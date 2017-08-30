@@ -1,0 +1,2 @@
+defmodule ExFunky do
+end
