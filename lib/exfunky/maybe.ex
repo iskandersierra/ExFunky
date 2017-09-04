@@ -148,17 +148,17 @@ defmodule ExFunky.Maybe do
 
       iex> ExFunky.Maybe.some(42) 
       ...> |> ExFunky.Maybe.to_trial()
-      {:ok, 42}
+      ExFunky.Trial.ok 42
 
       iex> ExFunky.Maybe.none() 
       ...> |> ExFunky.Maybe.to_trial()
-      {:error, :enoent}
+      ExFunky.Trial.error nil
 
   """
-  @spec to_trial(t) :: {:ok, term} | {:error, :enoent} # ExFunky.Trial.t
+  @spec to_trial(t) :: ExFunky.Trial.t
   def to_trial(maybe)
-  def to_trial({:some, x}), do: {:ok, x}
-  def to_trial(:none), do: {:error, :enoent}
+  def to_trial({:some, x}), do: ExFunky.Trial.ok x
+  def to_trial(:none), do: ExFunky.Trial.error nil
 
 
   @doc """
