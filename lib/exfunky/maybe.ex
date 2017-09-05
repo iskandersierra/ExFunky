@@ -31,7 +31,8 @@ defmodule ExFunky.Maybe do
   @type predicate :: (value -> boolean)
 
   @typedoc """
-  A folder is a function that given an accumulator and a value returns a new accumulator.
+  A folder is a function that given an accumulator and a value 
+  returns a new accumulator.
   """
   @type folder :: (acc, value -> term)
 
@@ -89,6 +90,31 @@ defmodule ExFunky.Maybe do
   def is_maybe({:some, _}), do: true
   def is_maybe(:none), do: true
   def is_maybe(_), do: false
+    
+
+  @doc """
+  Evaluates the corresponding function, `some_fun` or `none_fun`, depending on
+  whether the `maybe` is a `:some` or a `:none`.
+
+  ## Examples
+
+      iex> ExFunky.Maybe.some(42)
+      ...> |> ExFunky.Maybe.matches(&(&1), (fn() -> :empty end))
+      42
+
+      iex> ExFunky.Maybe.none()
+      ...> |> ExFunky.Maybe.matches(&(&1), (fn() -> :empty end))
+      :empty
+
+  """
+  @spec matches(t, (value -> any), (() -> any)) :: any
+  def matches(maybe, some_fun, none_fun) 
+    when is_function(some_fun, 1) and is_function(none_fun, 0) do
+    case maybe do
+      {:some, value} -> some_fun.(value)
+      :none -> none_fun.()
+    end
+  end
 
 
   @doc """
@@ -152,13 +178,12 @@ defmodule ExFunky.Maybe do
 
       iex> ExFunky.Maybe.none() 
       ...> |> ExFunky.Maybe.to_trial()
-      ExFunky.Trial.error nil
+      ExFunky.Trial.error()
 
   """
   @spec to_trial(t) :: ExFunky.Trial.t
-  def to_trial(maybe)
-  def to_trial({:some, x}), do: ExFunky.Trial.ok x
-  def to_trial(:none), do: ExFunky.Trial.error nil
+  def to_trial(maybe), do: maybe |> 
+    matches(&ExFunky.Trial.ok/1, (fn() -> ExFunky.Trial.error() end))
 
 
   @doc """
@@ -179,9 +204,8 @@ defmodule ExFunky.Maybe do
 
   """
   @spec get_value!(t) :: term | no_return
-  def get_value!(maybe)
-  def get_value!({:some, x}), do: x
-  def get_value!(:none), do: throw :enoent
+  def get_value!(maybe), do: maybe |> 
+    matches(&(&1), (fn() -> throw :enoent end))
 
 
   @doc """
@@ -207,9 +231,8 @@ defmodule ExFunky.Maybe do
 
   """
   @spec bind(t, binder) :: t
-  def bind(maybe, binder)
-  def bind({:some, x}, binder) when is_function(binder, 1), do: binder.(x)
-  def bind(:none, binder) when is_function(binder, 1), do: :none
+  def bind(maybe, binder) when is_function(binder, 1), do: maybe |> 
+    matches(&(binder.(&1)), (fn() -> :none end))
 
 
   @doc """
@@ -231,9 +254,8 @@ defmodule ExFunky.Maybe do
 
   """
   @spec map(t, mapper) :: t
-  def map(maybe, mapper)
-  def map({:some, x}, mapper) when is_function(mapper, 1), do: mapper.(x) |> some
-  def map(:none, mapper) when is_function(mapper, 1), do: :none
+  def map(maybe, mapper) when is_function(mapper, 1), do: maybe |> 
+    matches(&(mapper.(&1) |> some), (fn() -> :none end))
 
 
   @doc """
@@ -257,9 +279,8 @@ defmodule ExFunky.Maybe do
 
   """
   @spec exists(t, predicate) :: boolean
-  def exists(maybe, predicate)
-  def exists({:some, x}, predicate) when is_function(predicate, 1), do: predicate.(x)
-  def exists(:none, predicate) when is_function(predicate, 1), do: false
+  def exists(maybe, predicate) when is_function(predicate, 1), do: maybe |> 
+    matches(&(predicate.(&1)), (fn() -> false end))
 
 
   @doc """
@@ -283,14 +304,15 @@ defmodule ExFunky.Maybe do
 
   """
   @spec filter(t, predicate) :: t
-  def filter(maybe, predicate)
-  def filter({:some, x} = value, predicate) when is_function(predicate, 1) do
-    cond do
-      predicate.(x) -> value
-      :else -> :none
-    end
-  end
-  def filter(:none, predicate) when is_function(predicate, 1), do: none()
+  def filter(maybe, predicate) when is_function(predicate, 1), do: maybe |> 
+    matches(
+      (fn x ->
+        cond do
+            predicate.(x) -> some x
+            :else -> none()
+        end
+      end), 
+      (fn() -> none() end))
 
 
   @doc """
@@ -310,9 +332,11 @@ defmodule ExFunky.Maybe do
 
   """
   @spec fold(t, folder, acc) :: acc
-  def fold(maybe, folder, accumulator)
-  def fold({:some, x}, folder, acc) when is_function(folder, 2), do: folder.(acc, x)
-  def fold(:none, folder, acc) when is_function(folder, 2), do: acc
+  def fold(maybe, folder, accumulator) 
+    when is_function(folder, 2), 
+    do: maybe |> matches(
+      &(folder.(accumulator, &1)), 
+      (fn() -> accumulator end))
 
 
   @doc """
@@ -332,9 +356,7 @@ defmodule ExFunky.Maybe do
 
   """
   @spec count(t) :: 0 | 1
-  def count(maybe)
-  def count({:some, _}), do: 1
-  def count(:none), do: 0
+  def count(maybe), do: maybe |> matches((fn _ -> 1 end), (fn() -> 0 end))
 
 
   @doc """
